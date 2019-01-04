@@ -2,9 +2,10 @@ package awm
 
 import (
 	"context"
-	"github.com/goawm/kcp-go"
 	log "github.com/sirupsen/logrus"
+	"github.com/xtaci/kcp-go"
 	"io"
+	"time"
 )
 
 const BufSize = 2048
@@ -23,6 +24,17 @@ func NewTunnel(id int) *Tunnel {
 	})
 	k.WndSize(128, 128)
 	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				k.Update()
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
 	return &Tunnel{k: k, sendQ: sendQ, ctx: ctx, cancel: cancel}
 }
 
@@ -57,7 +69,7 @@ func (t *Tunnel) AddReader(r io.Reader) {
 			default:
 				n, err := r.Read(buf)
 				if n > 0 {
-					t.k.Input(buf[:n], true, false)
+					t.k.Input(buf, true, true)
 				}
 				if err != nil {
 					log.WithError(err).Error("read data failed")
