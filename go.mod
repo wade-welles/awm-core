@@ -1,14 +1,13 @@
 module github.com/goawm/awm-core
 
 require (
-	github.com/klauspost/cpuid v1.2.0 // indirect
-	github.com/klauspost/reedsolomon v1.8.0 // indirect
-	github.com/pkg/errors v0.8.0 // indirect
-	github.com/sirupsen/logrus v1.2.0
-	github.com/templexxx/cpufeat v0.0.0-20180724012125-cef66df7f161 // indirect
-	github.com/templexxx/xor v0.0.0-20181023030647-4e92f724b73b // indirect
-	github.com/tjfoc/gmsm v1.0.1 // indirect
-	github.com/xtaci/kcp-go v5.0.3+incompatible
-	golang.org/x/crypto v0.0.0-20190102171810-8d7daa0c54b3 // indirect
-	golang.org/x/net v0.0.0-20181220203305-927f97764cc3 // indirect
+	github.com/golang/mock v1.3.1 // indirect
+	github.com/golang/protobuf v1.3.1 // indirect
+	github.com/google/go-cmp v0.3.0 // indirect
+	github.com/miekg/dns v1.1.9 // indirect
+	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f // indirect
+	golang.org/x/net v0.0.0-20190514140710-3ec191127204 // indirect
+	google.golang.org/grpc v1.20.1 // indirect
+	v2ray.com/core v4.15.0+incompatible
+	v2ray.com/ext v4.15.0+incompatible // indirect
 )
