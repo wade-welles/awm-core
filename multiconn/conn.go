@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/hashicorp/golang-lru"
 )
 
 var globalConnID uint32
@@ -183,9 +185,9 @@ type MultiUDPConnListener struct {
 	closed    chan struct{}
 	closeFunc func()
 
-	rw           sync.RWMutex
-	connID2Addrs map[uint16]map[string]*net.UDPAddr
-	addr2ConnID  map[string]uint16
+	rw          sync.RWMutex
+	connCache   *lru.Cache
+	addr2ConnID map[string]uint16
 }
 
 func NewMultiUDPConnListener(udpConn *net.UDPConn) *MultiUDPConnListener {
@@ -199,13 +201,25 @@ func NewMultiUDPConnListener(udpConn *net.UDPConn) *MultiUDPConnListener {
 		})
 	}
 
+	addr2ConnID := make(map[string]uint16)
+	connCache, err := lru.NewWithEvict(1024, func(key interface{}, value interface{}) {
+		availAddrs := value.(map[string]*net.UDPAddr)
+		for addr := range availAddrs {
+			delete(addr2ConnID, addr)
+		}
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	l := &MultiUDPConnListener{
-		udpConn:      udpConn,
-		recvBuf:      recvBuf,
-		closed:       closed,
-		closeFunc:    closeFunc,
-		connID2Addrs: make(map[uint16]map[string]*net.UDPAddr),
-		addr2ConnID:  make(map[string]uint16),
+		udpConn:   udpConn,
+		recvBuf:   recvBuf,
+		closed:    closed,
+		closeFunc: closeFunc,
+
+		connCache:   connCache,
+		addr2ConnID: addr2ConnID,
 	}
 	go func() {
 		buf := make([]byte, 2048)
@@ -224,12 +238,16 @@ func NewMultiUDPConnListener(udpConn *net.UDPConn) *MultiUDPConnListener {
 
 			l.rw.Lock()
 			l.addr2ConnID[addr.String()] = connID
-			udpAddrs, ok := l.connID2Addrs[connID]
+
+			var availAddrs map[string]*net.UDPAddr
+			availAddrsI, ok := l.connCache.Get(connID)
 			if !ok {
-				udpAddrs = make(map[string]*net.UDPAddr)
-				l.connID2Addrs[connID] = udpAddrs
+				availAddrs = make(map[string]*net.UDPAddr)
+				l.connCache.Add(connID, availAddrs)
+			} else {
+				availAddrs = availAddrsI.(map[string]*net.UDPAddr)
 			}
-			udpAddrs[addr.String()] = addr.(*net.UDPAddr)
+			availAddrs[addr.String()] = addr.(*net.UDPAddr)
 			l.rw.Unlock()
 
 			data := append([]byte(nil), buf[2:n]...)
@@ -259,14 +277,16 @@ func (l *MultiUDPConnListener) WriteTo(p []byte, addr net.Addr) (n int, err erro
 		l.rw.RUnlock()
 		return 0, errors.New("invalid addr")
 	}
-	addrsMap, ok := l.connID2Addrs[connID]
+
+	availAddrsI, ok := l.connCache.Get(connID)
 	if !ok {
 		l.rw.RUnlock()
 		return 0, errors.New("invalid connection")
 	}
 
+	availAddrs := availAddrsI.(map[string]*net.UDPAddr)
 	var udpAddrs []*net.UDPAddr
-	for _, addr := range addrsMap {
+	for _, addr := range availAddrs {
 		udpAddrs = append(udpAddrs, addr)
 	}
 	l.rw.RUnlock()

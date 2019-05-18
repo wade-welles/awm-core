@@ -58,7 +58,8 @@ func main() {
 		}
 		stream, err := sess.AcceptStream()
 		if err != nil {
-			panic(err)
+			log.Println(err)
+			continue
 		}
 
 		go s.ServeConn(&streamConn{Stream: stream})
