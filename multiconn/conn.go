@@ -236,19 +236,29 @@ func NewMultiUDPConnListener(udpConn *net.UDPConn) *MultiUDPConnListener {
 			}
 			connID := binary.BigEndian.Uint16(buf[:2])
 
-			l.rw.Lock()
-			l.addr2ConnID[addr.String()] = connID
+			func() {
+				l.rw.RLock()
+				oldConnID, ok := l.addr2ConnID[addr.String()]
+				l.rw.RUnlock()
+				if ok && oldConnID == connID {
+					return
+				}
 
-			var availAddrs map[string]*net.UDPAddr
-			availAddrsI, ok := l.connCache.Get(connID)
-			if !ok {
-				availAddrs = make(map[string]*net.UDPAddr)
-				l.connCache.Add(connID, availAddrs)
-			} else {
-				availAddrs = availAddrsI.(map[string]*net.UDPAddr)
-			}
-			availAddrs[addr.String()] = addr.(*net.UDPAddr)
-			l.rw.Unlock()
+				l.rw.Lock()
+				defer l.rw.Unlock()
+
+				var availAddrs map[string]*net.UDPAddr
+
+				l.addr2ConnID[addr.String()] = connID
+				availAddrsI, ok := l.connCache.Get(connID)
+				if !ok {
+					availAddrs = make(map[string]*net.UDPAddr)
+					l.connCache.Add(connID, availAddrs)
+				} else {
+					availAddrs = availAddrsI.(map[string]*net.UDPAddr)
+				}
+				availAddrs[addr.String()] = addr.(*net.UDPAddr)
+			}()
 
 			data := append([]byte(nil), buf[2:n]...)
 			recvBuf <- &Packet{Data: data, Addr: addr}
